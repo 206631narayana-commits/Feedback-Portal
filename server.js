@@ -59,10 +59,6 @@ connectDB()
     process.exit(1);
   });
 
-
-const __filename = fileURLToPath(import.meta.url);
-
-
 // 1. First, make sure you are serving your frontend static build files
 // (Replace '../frontend/dist' with your actual production build folder path)
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
