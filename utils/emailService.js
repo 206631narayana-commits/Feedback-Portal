@@ -21,12 +21,20 @@ const createTransporter = () => {
   const pass = process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.MAIL_PASS;
 
   if (!user || !pass) {
-    console.warn('Email credentials are missing. Skipping certificate email.');
+    console.warn('❌ Email credentials are missing. Skipping certificate email.');
+    console.warn('EMAIL_USER:', user ? 'SET' : 'MISSING');
+    console.warn('EMAIL_PASS:', pass ? 'SET' : 'MISSING');
     return null;
   }
 
   const port = Number(process.env.SMTP_PORT || 587);
   const isSecure = port === 465; // Port 465 = SSL/implicit, 587 = TLS/explicit
+
+  console.log('✅ Creating Gmail transporter with:');
+  console.log('📧 User:', user);
+  console.log('🔐 Password: ••••••' + (pass ? pass.slice(-4) : 'NONE'));
+  console.log('🌐 Host:', process.env.SMTP_HOST || 'smtp.gmail.com');
+  console.log('🔌 Port:', port, `(${isSecure ? 'SSL' : 'TLS'})`);
 
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -66,19 +74,20 @@ const getTransporter = () => {
 export const sendCertificateEmail = async (student, filePath) => {
   const transporter = getTransporter();
   if (!transporter) {
-    console.warn('Email transporter not available - credentials missing');
+    console.warn('❌ Email transporter not available - credentials missing');
     return { sent: false, reason: 'missing credentials' };
   }
 
   // Verify PDF file exists before sending
   if (!fs.existsSync(filePath)) {
-    console.error('PDF file not found at path:', filePath);
+    console.error('❌ PDF file not found at path:', filePath);
     return { sent: false, reason: 'PDF file not found', path: filePath };
   }
 
   console.log('📧 Preparing email to:', student.email);
   console.log('📎 Attachment path:', filePath);
   console.log('📎 File exists:', fs.existsSync(filePath));
+  console.log('📎 File size:', fs.statSync(filePath).size, 'bytes');
 
   const mailOptions = {
     from: process.env.EMAIL_USER,
@@ -101,9 +110,11 @@ export const sendCertificateEmail = async (student, filePath) => {
   };
 
   try {
+    console.log('🔗 Attempting SMTP connection to Gmail...');
     const result = await transporter.sendMail(mailOptions);
     console.log('✅ Email sent successfully to:', student.email);
     console.log('📨 Message ID:', result.messageId);
+    console.log('📊 Response:', result.response);
     return { sent: true, messageId: result.messageId };
   } catch (error) {
     console.error('❌ Email sending error:', {
@@ -112,6 +123,7 @@ export const sendCertificateEmail = async (student, filePath) => {
       message: error.message,
       command: error.command,
       response: error.response,
+      fullError: error.toString(),
     });
     return { sent: false, reason: error.message, code: error.code };
   }
@@ -120,18 +132,52 @@ export const sendCertificateEmail = async (student, filePath) => {
 // Send email asynchronously without blocking response
 export const sendCertificateEmailAsync = (student, filePath) => {
   console.log('⏳ Queuing email asynchronously for:', student.email);
-  
-  // Add small delay to ensure file is completely written
+  console.log('📧 Checking credentials:', {
+    user: process.env.EMAIL_USER ? 'SET' : 'MISSING',
+    pass: process.env.EMAIL_PASS ? 'SET' : 'MISSING',
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: process.env.SMTP_PORT || 587,
+  });
+
+  // Add delay to ensure file is completely written
   setTimeout(async () => {
     try {
+      console.log('🔄 Starting email send attempt for:', student.email);
+      
+      // Verify credentials are still available
+      const user = process.env.EMAIL_USER;
+      const pass = process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.MAIL_PASS;
+      
+      if (!user || !pass) {
+        console.error('❌ Email credentials missing during async send!');
+        console.error('USER:', user ? 'present' : 'MISSING');
+        console.error('PASS:', pass ? 'present' : 'MISSING');
+        return;
+      }
+
+      // Verify file still exists before sending
+      if (!fs.existsSync(filePath)) {
+        console.error('❌ PDF file not found during async send:', filePath);
+        return;
+      }
+
+      console.log('✔️ Pre-flight checks passed, sending email...');
       const result = await sendCertificateEmail(student, filePath);
-      if (!result.sent) {
-        console.error('⚠️ Async email send failed for', student.email, ':', result.reason);
+      
+      if (result.sent) {
+        console.log('✅ Async email delivered successfully to:', student.email);
+        console.log('📨 Message ID:', result.messageId);
+      } else {
+        console.error('⚠️ Async email send failed:', result.reason);
       }
     } catch (error) {
-      console.error('❌ Async email sending error:', error);
+      console.error('❌ Async email sending exception:', {
+        email: student.email,
+        error: error.message,
+        stack: error.stack,
+      });
     }
-  }, 1000); // 1 second delay to ensure PDF is written
+  }, 2000); // Increased to 2 seconds
 };
 
 // import nodemailer from "nodemailer";

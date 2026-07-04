@@ -185,16 +185,37 @@ export const testEmail = async (req, res) => {
   }
 
   try {
+    console.log('\n🧪 ===== TEST EMAIL START =====');
+    console.log('🔍 Checking environment variables...');
+    console.log('EMAIL_USER:', process.env.EMAIL_USER ? '✅ SET' : '❌ MISSING');
+    console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? '✅ SET' : '❌ MISSING');
+    console.log('SMTP_HOST:', process.env.SMTP_HOST || 'smtp.gmail.com');
+    console.log('SMTP_PORT:', process.env.SMTP_PORT || 587);
+    console.log('SMTP_SECURE:', process.env.SMTP_SECURE || 'false');
+
     const nodemailer = (await import('nodemailer')).default;
     const user = process.env.EMAIL_USER;
     const pass = process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.MAIL_PASS;
 
     if (!user || !pass) {
-      return res.status(400).json({ message: 'Email credentials not configured in environment' });
+      console.error('❌ Email credentials not configured!');
+      return res.status(400).json({ 
+        message: 'Email credentials not configured in environment',
+        details: {
+          USER: user ? 'present' : 'MISSING',
+          PASS: pass ? 'present' : 'MISSING'
+        }
+      });
     }
 
     const port = Number(process.env.SMTP_PORT || 587);
     const isSecure = port === 465;
+
+    console.log('\n🔗 Creating transporter with:');
+    console.log('Host:', process.env.SMTP_HOST || 'smtp.gmail.com');
+    console.log('Port:', port);
+    console.log('Secure:', isSecure);
+    console.log('User:', user);
 
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -202,8 +223,19 @@ export const testEmail = async (req, res) => {
       secure: isSecure,
       auth: { user, pass },
       tls: { rejectUnauthorized: false },
+      connectionTimeout: 60000,
+      greetingTimeout: 60000,
+      socketTimeout: 60000,
     });
 
+    console.log('✅ Transporter created, attempting to verify connection...');
+    
+    // Verify SMTP connection
+    await transporter.verify();
+    console.log('✅ SMTP connection verified successfully!');
+
+    console.log('\n📧 Sending test email to:', recipientEmail);
+    
     const mailOptions = {
       from: user,
       to: recipientEmail,
@@ -215,21 +247,40 @@ export const testEmail = async (req, res) => {
         <p><strong>SMTP Host:</strong> ${process.env.SMTP_HOST || 'smtp.gmail.com'}</p>
         <p><strong>SMTP Port:</strong> ${port}</p>
         <p><strong>Secure:</strong> ${isSecure ? 'SSL (465)' : 'TLS (587)'}</p>
+        <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
       `,
     };
 
     const result = await transporter.sendMail(mailOptions);
+    
+    console.log('✅ Test email sent successfully!');
+    console.log('Message ID:', result.messageId);
+    console.log('Response:', result.response);
+    console.log('🧪 ===== TEST EMAIL END =====\n');
+    
     res.json({ 
       message: 'Test email sent successfully!',
       messageId: result.messageId,
       recipientEmail,
+      status: 'SUCCESS',
     });
   } catch (error) {
-    console.error('Test email error:', error);
+    console.error('\n❌ Test email error:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      fullError: error.toString(),
+      stack: error.stack,
+    });
+    console.error('🧪 ===== TEST EMAIL FAILED =====\n');
+    
     res.status(500).json({ 
       message: 'Test email failed',
       error: error.message,
       code: error.code,
+      details: error.response || error.toString(),
+      status: 'FAILED',
     });
   }
 };
