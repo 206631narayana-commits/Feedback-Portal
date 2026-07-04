@@ -15,8 +15,8 @@ const connectDB = async () => {
       return conn;
     }
   } catch (error) {
-    console.warn('Primary MongoDB connection failed, trying local fallback...');
-  }
+    console.error(error.message);
+}
 
   try {
     const fallbackConn = await mongoose.connect('mongodb://127.0.0.1:27017/feedbackportal', options);
