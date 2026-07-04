@@ -1,6 +1,6 @@
 import Student from '../models/studentModel.js';
 import { generateCertificate } from '../services/certificateService.js';
-import { sendCertificateEmail } from '../utils/emailService.js';
+import { sendCertificateEmailAsync } from '../utils/emailService.js';
 import { validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -57,10 +57,12 @@ export const createFeedback = async (req, res) => {
     }
 
     let emailResult = { sent: false, reason: 'not-attempted' };
+    // Send email asynchronously (non-blocking)
     try {
-      emailResult = await sendCertificateEmail(savedStudent, filePath);
+      sendCertificateEmailAsync(savedStudent, filePath);
+      emailResult = { sent: true, async: true, message: 'Email queued for sending' };
     } catch (emailErr) {
-      console.error('Email sending failed:', emailErr);
+      console.error('Email queue failed:', emailErr);
       emailResult = { sent: false, reason: emailErr.message };
     }
 
