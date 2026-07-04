@@ -58,13 +58,3 @@ connectDB()
     console.error('Server startup error:', error);
     process.exit(1);
   });
-
-// 1. First, make sure you are serving your frontend static build files
-// (Replace '../frontend/dist' with your actual production build folder path)
-app.use(express.static(path.join(__dirname, '../frontend/dist')));
-
-// 2. THE CATCH-ALL FIX:
-// This sends the index.html file for ANY page route, so React Router can load /admin/dashboard
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
-});
