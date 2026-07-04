@@ -28,6 +28,9 @@ const createTransporter = () => {
       user,
       pass,
     },
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 30000,
   });
 };
 
