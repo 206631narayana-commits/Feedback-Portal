@@ -1,6 +1,6 @@
 import express from 'express';
 import { body } from 'express-validator';
-import { createFeedback, deleteFeedback, getFeedback, getFeedbackById, updateFeedback } from '../controllers/feedbackController.js';
+import { createFeedback, deleteFeedback, getFeedback, getFeedbackById, updateFeedback, testEmail } from '../controllers/feedbackController.js';
 import protect from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -20,5 +20,8 @@ router.get('/', protect, getFeedback);
 router.get('/:id', protect, getFeedbackById);
 router.put('/:id', protect, updateFeedback);
 router.delete('/:id', protect, deleteFeedback);
+
+// Test email endpoint (for debugging)
+router.post('/test-email', testEmail);
 
 export default router;

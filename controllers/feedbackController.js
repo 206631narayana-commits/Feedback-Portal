@@ -175,3 +175,61 @@ export const seedAdmin = async () => {
     }
   }
 };
+
+// Test email endpoint - for debugging email credentials
+export const testEmail = async (req, res) => {
+  const { recipientEmail } = req.body;
+
+  if (!recipientEmail) {
+    return res.status(400).json({ message: 'recipientEmail is required' });
+  }
+
+  try {
+    const nodemailer = (await import('nodemailer')).default;
+    const user = process.env.EMAIL_USER;
+    const pass = process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.MAIL_PASS;
+
+    if (!user || !pass) {
+      return res.status(400).json({ message: 'Email credentials not configured in environment' });
+    }
+
+    const port = Number(process.env.SMTP_PORT || 587);
+    const isSecure = port === 465;
+
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: port,
+      secure: isSecure,
+      auth: { user, pass },
+      tls: { rejectUnauthorized: false },
+    });
+
+    const mailOptions = {
+      from: user,
+      to: recipientEmail,
+      subject: '🧪 Test Email - Certificate Portal',
+      html: `
+        <h2>✅ Email Test Successful!</h2>
+        <p>If you received this, your email configuration is working correctly.</p>
+        <p><strong>Sender:</strong> ${user}</p>
+        <p><strong>SMTP Host:</strong> ${process.env.SMTP_HOST || 'smtp.gmail.com'}</p>
+        <p><strong>SMTP Port:</strong> ${port}</p>
+        <p><strong>Secure:</strong> ${isSecure ? 'SSL (465)' : 'TLS (587)'}</p>
+      `,
+    };
+
+    const result = await transporter.sendMail(mailOptions);
+    res.json({ 
+      message: 'Test email sent successfully!',
+      messageId: result.messageId,
+      recipientEmail,
+    });
+  } catch (error) {
+    console.error('Test email error:', error);
+    res.status(500).json({ 
+      message: 'Test email failed',
+      error: error.message,
+      code: error.code,
+    });
+  }
+};

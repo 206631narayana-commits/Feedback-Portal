@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -69,6 +70,16 @@ export const sendCertificateEmail = async (student, filePath) => {
     return { sent: false, reason: 'missing credentials' };
   }
 
+  // Verify PDF file exists before sending
+  if (!fs.existsSync(filePath)) {
+    console.error('PDF file not found at path:', filePath);
+    return { sent: false, reason: 'PDF file not found', path: filePath };
+  }
+
+  console.log('📧 Preparing email to:', student.email);
+  console.log('📎 Attachment path:', filePath);
+  console.log('📎 File exists:', fs.existsSync(filePath));
+
   const mailOptions = {
     from: process.env.EMAIL_USER,
     to: student.email,
@@ -84,20 +95,23 @@ export const sendCertificateEmail = async (student, filePath) => {
     attachments: [
       {
         filename: `certificate-${student.certificateId || 'download'}.pdf`,
-        path: path.resolve(filePath),
+        path: filePath, // Use original path, not resolved
       },
     ],
   };
 
   try {
     const result = await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully:', result.messageId);
-    return { sent: true };
+    console.log('✅ Email sent successfully to:', student.email);
+    console.log('📨 Message ID:', result.messageId);
+    return { sent: true, messageId: result.messageId };
   } catch (error) {
-    console.error('Email sending error:', {
+    console.error('❌ Email sending error:', {
+      to: student.email,
       code: error.code,
       message: error.message,
       command: error.command,
+      response: error.response,
     });
     return { sent: false, reason: error.message, code: error.code };
   }
@@ -105,13 +119,19 @@ export const sendCertificateEmail = async (student, filePath) => {
 
 // Send email asynchronously without blocking response
 export const sendCertificateEmailAsync = (student, filePath) => {
-  setImmediate(async () => {
+  console.log('⏳ Queuing email asynchronously for:', student.email);
+  
+  // Add small delay to ensure file is completely written
+  setTimeout(async () => {
     try {
-      await sendCertificateEmail(student, filePath);
+      const result = await sendCertificateEmail(student, filePath);
+      if (!result.sent) {
+        console.error('⚠️ Async email send failed for', student.email, ':', result.reason);
+      }
     } catch (error) {
-      console.error('Async email sending failed:', error.message);
+      console.error('❌ Async email sending error:', error);
     }
-  });
+  }, 1000); // 1 second delay to ensure PDF is written
 };
 
 // import nodemailer from "nodemailer";
