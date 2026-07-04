@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import sgTransport from 'nodemailer-sendgrid-transport';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,57 +11,32 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 console.log("EMAIL_USER:", process.env.EMAIL_USER);
-console.log("EMAIL_PASS exists:", !!process.env.EMAIL_PASS);
-console.log("SMTP_PORT:", process.env.SMTP_PORT || 587);
-console.log("SMTP_SECURE:", process.env.SMTP_SECURE || 'false (TLS)');
+console.log("SENDGRID_API_KEY exists:", !!process.env.SENDGRID_API_KEY);
 
 let transporter = null;
 
 const createTransporter = () => {
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.MAIL_PASS;
+  const sendgridKey = process.env.SENDGRID_API_KEY;
+  const emailUser = process.env.EMAIL_USER;
 
-  if (!user || !pass) {
-    console.warn('❌ Email credentials are missing. Skipping certificate email.');
-    console.warn('EMAIL_USER:', user ? 'SET' : 'MISSING');
-    console.warn('EMAIL_PASS:', pass ? 'SET' : 'MISSING');
+  if (!sendgridKey || !emailUser) {
+    console.warn('❌ SendGrid credentials are missing.');
+    console.warn('SENDGRID_API_KEY:', sendgridKey ? 'SET' : 'MISSING');
+    console.warn('EMAIL_USER:', emailUser ? 'SET' : 'MISSING');
     return null;
   }
 
-  const port = Number(process.env.SMTP_PORT || 587);
-  const isSecure = port === 465; // Port 465 = SSL/implicit, 587 = TLS/explicit
+  console.log('✅ Creating SendGrid transporter with:');
+  console.log('📧 From Email:', emailUser);
+  console.log('🔑 SendGrid API Key: ••••••' + (sendgridKey ? sendgridKey.slice(-8) : 'NONE'));
 
-  console.log('✅ Creating Gmail transporter with:');
-  console.log('📧 User:', user);
-  console.log('🔐 Password: ••••••' + (pass ? pass.slice(-4) : 'NONE'));
-  console.log('🌐 Host:', process.env.SMTP_HOST || 'smtp.gmail.com');
-  console.log('🔌 Port:', port, `(${isSecure ? 'SSL' : 'TLS'})`);
-
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: port,
-    secure: isSecure, // true for 465, false for 587 (TLS)
-    auth: {
-      user,
-      pass,
-    },
-    // Render-friendly connection settings
-    connectionTimeout: 60000, // Increased to 60 seconds
-    greetingTimeout: 60000,
-    socketTimeout: 60000,
-    authTimeout: 10000,
-    // Connection pooling for reuse
-    pool: {
-      maxConnections: 5,
-      maxMessages: 100,
-      rateDelta: 4000,
-      rateLimit: 14,
-    },
-    // Keep alive for persistent connections
-    tls: {
-      rejectUnauthorized: false, // For development/Render compatibility
-    },
-  });
+  return nodemailer.createTransport(
+    sgTransport({
+      auth: {
+        api_key: sendgridKey,
+      },
+    })
+  );
 };
 
 // Get or create transporter (reuse connection)
@@ -104,13 +80,13 @@ export const sendCertificateEmail = async (student, filePath) => {
     attachments: [
       {
         filename: `certificate-${student.certificateId || 'download'}.pdf`,
-        path: filePath, // Use original path, not resolved
+        path: filePath,
       },
     ],
   };
 
   try {
-    console.log('🔗 Attempting SMTP connection to Gmail...');
+    console.log('🔗 Attempting to send via SendGrid...');
     const result = await transporter.sendMail(mailOptions);
     console.log('✅ Email sent successfully to:', student.email);
     console.log('📨 Message ID:', result.messageId);
@@ -121,8 +97,6 @@ export const sendCertificateEmail = async (student, filePath) => {
       to: student.email,
       code: error.code,
       message: error.message,
-      command: error.command,
-      response: error.response,
       fullError: error.toString(),
     });
     return { sent: false, reason: error.message, code: error.code };
@@ -134,9 +108,7 @@ export const sendCertificateEmailAsync = (student, filePath) => {
   console.log('⏳ Queuing email asynchronously for:', student.email);
   console.log('📧 Checking credentials:', {
     user: process.env.EMAIL_USER ? 'SET' : 'MISSING',
-    pass: process.env.EMAIL_PASS ? 'SET' : 'MISSING',
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: process.env.SMTP_PORT || 587,
+    key: process.env.SENDGRID_API_KEY ? 'SET' : 'MISSING',
   });
 
   // Add delay to ensure file is completely written
@@ -145,13 +117,13 @@ export const sendCertificateEmailAsync = (student, filePath) => {
       console.log('🔄 Starting email send attempt for:', student.email);
       
       // Verify credentials are still available
-      const user = process.env.EMAIL_USER;
-      const pass = process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.MAIL_PASS;
+      const apiKey = process.env.SENDGRID_API_KEY;
+      const emailUser = process.env.EMAIL_USER;
       
-      if (!user || !pass) {
+      if (!apiKey || !emailUser) {
         console.error('❌ Email credentials missing during async send!');
-        console.error('USER:', user ? 'present' : 'MISSING');
-        console.error('PASS:', pass ? 'present' : 'MISSING');
+        console.error('API_KEY:', apiKey ? 'present' : 'MISSING');
+        console.error('EMAIL_USER:', emailUser ? 'present' : 'MISSING');
         return;
       }
 
@@ -177,7 +149,7 @@ export const sendCertificateEmailAsync = (student, filePath) => {
         stack: error.stack,
       });
     }
-  }, 2000); // Increased to 2 seconds
+  }, 2000); // 2 seconds delay to ensure PDF is written
 };
 
 // import nodemailer from "nodemailer";

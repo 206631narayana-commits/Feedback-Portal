@@ -188,65 +188,54 @@ export const testEmail = async (req, res) => {
     console.log('\n🧪 ===== TEST EMAIL START =====');
     console.log('🔍 Checking environment variables...');
     console.log('EMAIL_USER:', process.env.EMAIL_USER ? '✅ SET' : '❌ MISSING');
-    console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? '✅ SET' : '❌ MISSING');
-    console.log('SMTP_HOST:', process.env.SMTP_HOST || 'smtp.gmail.com');
-    console.log('SMTP_PORT:', process.env.SMTP_PORT || 587);
-    console.log('SMTP_SECURE:', process.env.SMTP_SECURE || 'false');
+    console.log('SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? '✅ SET' : '❌ MISSING');
 
-    const nodemailer = (await import('nodemailer')).default;
-    const user = process.env.EMAIL_USER;
-    const pass = process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.MAIL_PASS;
+    const sendgridKey = process.env.SENDGRID_API_KEY;
+    const emailUser = process.env.EMAIL_USER;
 
-    if (!user || !pass) {
-      console.error('❌ Email credentials not configured!');
+    if (!sendgridKey || !emailUser) {
+      console.error('❌ SendGrid credentials not configured!');
       return res.status(400).json({ 
-        message: 'Email credentials not configured in environment',
+        message: 'SendGrid credentials not configured in environment',
         details: {
-          USER: user ? 'present' : 'MISSING',
-          PASS: pass ? 'present' : 'MISSING'
+          SENDGRID_API_KEY: sendgridKey ? 'present' : 'MISSING',
+          EMAIL_USER: emailUser ? 'present' : 'MISSING'
         }
       });
     }
 
-    const port = Number(process.env.SMTP_PORT || 587);
-    const isSecure = port === 465;
+    const nodemailer = (await import('nodemailer')).default;
+    const sgTransport = (await import('nodemailer-sendgrid-transport')).default;
 
-    console.log('\n🔗 Creating transporter with:');
-    console.log('Host:', process.env.SMTP_HOST || 'smtp.gmail.com');
-    console.log('Port:', port);
-    console.log('Secure:', isSecure);
-    console.log('User:', user);
+    console.log('\n🔗 Creating SendGrid transporter...');
+    console.log('From Email:', emailUser);
+    console.log('API Key: ••••••' + sendgridKey.slice(-8));
 
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: port,
-      secure: isSecure,
-      auth: { user, pass },
-      tls: { rejectUnauthorized: false },
-      connectionTimeout: 60000,
-      greetingTimeout: 60000,
-      socketTimeout: 60000,
-    });
+    const transporter = nodemailer.createTransport(
+      sgTransport({
+        auth: {
+          api_key: sendgridKey,
+        },
+      })
+    );
 
     console.log('✅ Transporter created, attempting to verify connection...');
     
-    // Verify SMTP connection
+    // Verify SendGrid connection
     await transporter.verify();
-    console.log('✅ SMTP connection verified successfully!');
+    console.log('✅ SendGrid connection verified successfully!');
 
     console.log('\n📧 Sending test email to:', recipientEmail);
     
     const mailOptions = {
-      from: user,
+      from: emailUser,
       to: recipientEmail,
       subject: '🧪 Test Email - Certificate Portal',
       html: `
         <h2>✅ Email Test Successful!</h2>
-        <p>If you received this, your email configuration is working correctly.</p>
-        <p><strong>Sender:</strong> ${user}</p>
-        <p><strong>SMTP Host:</strong> ${process.env.SMTP_HOST || 'smtp.gmail.com'}</p>
-        <p><strong>SMTP Port:</strong> ${port}</p>
-        <p><strong>Secure:</strong> ${isSecure ? 'SSL (465)' : 'TLS (587)'}</p>
+        <p>If you received this, your SendGrid email configuration is working correctly.</p>
+        <p><strong>Sender:</strong> ${emailUser}</p>
+        <p><strong>Service:</strong> SendGrid</p>
         <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
       `,
     };
@@ -268,8 +257,6 @@ export const testEmail = async (req, res) => {
     console.error('\n❌ Test email error:', {
       message: error.message,
       code: error.code,
-      command: error.command,
-      response: error.response,
       fullError: error.toString(),
       stack: error.stack,
     });
@@ -279,7 +266,7 @@ export const testEmail = async (req, res) => {
       message: 'Test email failed',
       error: error.message,
       code: error.code,
-      details: error.response || error.toString(),
+      details: error.toString(),
       status: 'FAILED',
     });
   }
