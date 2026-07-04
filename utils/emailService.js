@@ -118,6 +118,13 @@ export const sendCertificateEmail = async (student, filePath) => {
       },
     ],
   });
+  try {
+  await transporter.verify();
+  console.log("SMTP verified successfully");
+} catch (err) {
+  console.error("SMTP verify failed:", err);
+  throw err;
+}
 
   return {
     sent: true,
