@@ -6,6 +6,8 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
@@ -57,3 +59,17 @@ connectDB()
     console.error('Server startup error:', error);
     process.exit(1);
   });
+
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// 1. First, make sure you are serving your frontend static build files
+// (Replace '../frontend/dist' with your actual production build folder path)
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+// 2. THE CATCH-ALL FIX:
+// This sends the index.html file for ANY page route, so React Router can load /admin/dashboard
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+});
