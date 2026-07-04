@@ -11,28 +11,39 @@ const __dirname = path.dirname(__filename);
 console.log("EMAIL_USER:", process.env.EMAIL_USER);
 console.log("EMAIL_PASS exists:", !!process.env.EMAIL_PASS);
 
-const createTransporter = () => {
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.MAIL_PASS;
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
-  if (!user || !pass) {
-    console.warn('Email credentials are missing. Skipping certificate email.');
-    return null;
-  }
+await transporter.verify();
+console.log("SMTP Connected");
 
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user,
-      pass,
-    },
-    connectionTimeout: 30000,
-    greetingTimeout: 30000,
-    socketTimeout: 30000,
-  });
-};
+// const createTransporter = () => {
+//   const user = process.env.EMAIL_USER;
+//   const pass = process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.MAIL_PASS;
+
+//   if (!user || !pass) {
+//     console.warn('Email credentials are missing. Skipping certificate email.');
+//     return null;
+//   }
+
+//   return nodemailer.createTransport({
+//     host: process.env.SMTP_HOST || 'smtp.gmail.com',
+//     port: Number(process.env.SMTP_PORT || 587),
+//     secure: process.env.SMTP_SECURE === 'true',
+//     auth: {
+//       user,
+//       pass,
+//     },
+//     connectionTimeout: 30000,
+//     greetingTimeout: 30000,
+//     socketTimeout: 30000,
+//   });
+// };
 
 export const sendCertificateEmail = async (student, filePath) => {
   const transporter = createTransporter();
@@ -60,6 +71,6 @@ export const sendCertificateEmail = async (student, filePath) => {
     ],
   };
 
-  await transporter.sendMail(mailOptions);
-  return { sent: true };
+  // await transporter.sendMail(mailOptions);
+  // return { sent: true };
 };
