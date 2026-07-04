@@ -204,53 +204,41 @@ export const testEmail = async (req, res) => {
       });
     }
 
-    const nodemailer = (await import('nodemailer')).default;
-    const sgTransport = (await import('nodemailer-sendgrid-transport')).default;
+    const sgMail = (await import('@sendgrid/mail')).default;
+    sgMail.setApiKey(sendgridKey);
 
-    console.log('\n🔗 Creating SendGrid transporter...');
+    console.log('\n📧 Setting up SendGrid...');
     console.log('From Email:', emailUser);
     console.log('API Key: ••••••' + sendgridKey.slice(-8));
+    console.log('To Email:', recipientEmail);
 
-    const transporter = nodemailer.createTransport(
-      sgTransport({
-        auth: {
-          api_key: sendgridKey,
-        },
-      })
-    );
-
-    console.log('✅ Transporter created, attempting to verify connection...');
+    console.log('\n📧 Sending test email...');
     
-    // Verify SendGrid connection
-    await transporter.verify();
-    console.log('✅ SendGrid connection verified successfully!');
-
-    console.log('\n📧 Sending test email to:', recipientEmail);
-    
-    const mailOptions = {
-      from: emailUser,
+    const msg = {
       to: recipientEmail,
+      from: emailUser,
       subject: '🧪 Test Email - Certificate Portal',
       html: `
         <h2>✅ Email Test Successful!</h2>
         <p>If you received this, your SendGrid email configuration is working correctly.</p>
         <p><strong>Sender:</strong> ${emailUser}</p>
-        <p><strong>Service:</strong> SendGrid</p>
+        <p><strong>Service:</strong> SendGrid Official API</p>
         <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
       `,
     };
 
-    const result = await transporter.sendMail(mailOptions);
+    const result = await sgMail.send(msg);
     
     console.log('✅ Test email sent successfully!');
-    console.log('Message ID:', result.messageId);
-    console.log('Response:', result.response);
+    console.log('Status Code:', result[0].statusCode);
+    console.log('Message ID:', result[0].headers['x-message-id']);
     console.log('🧪 ===== TEST EMAIL END =====\n');
     
     res.json({ 
       message: 'Test email sent successfully!',
-      messageId: result.messageId,
+      messageId: result[0].headers['x-message-id'],
       recipientEmail,
+      statusCode: result[0].statusCode,
       status: 'SUCCESS',
     });
   } catch (error) {

@@ -1,5 +1,4 @@
-import nodemailer from 'nodemailer';
-import sgTransport from 'nodemailer-sendgrid-transport';
+import sgMail from '@sendgrid/mail';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -13,44 +12,27 @@ const __dirname = path.dirname(__filename);
 console.log("EMAIL_USER:", process.env.EMAIL_USER);
 console.log("SENDGRID_API_KEY exists:", !!process.env.SENDGRID_API_KEY);
 
-let transporter = null;
-
-const createTransporter = () => {
-  const sendgridKey = process.env.SENDGRID_API_KEY;
-  const emailUser = process.env.EMAIL_USER;
-
-  if (!sendgridKey || !emailUser) {
-    console.warn('❌ SendGrid credentials are missing.');
-    console.warn('SENDGRID_API_KEY:', sendgridKey ? 'SET' : 'MISSING');
-    console.warn('EMAIL_USER:', emailUser ? 'SET' : 'MISSING');
-    return null;
+// Initialize SendGrid with API key
+const initializeSendGrid = () => {
+  const apiKey = process.env.SENDGRID_API_KEY;
+  if (apiKey) {
+    sgMail.setApiKey(apiKey);
+    console.log('✅ SendGrid initialized with API key');
+  } else {
+    console.warn('❌ SENDGRID_API_KEY not found in environment');
   }
-
-  console.log('✅ Creating SendGrid transporter with:');
-  console.log('📧 From Email:', emailUser);
-  console.log('🔑 SendGrid API Key: ••••••' + (sendgridKey ? sendgridKey.slice(-8) : 'NONE'));
-
-  return nodemailer.createTransport(
-    sgTransport({
-      auth: {
-        api_key: sendgridKey,
-      },
-    })
-  );
 };
 
-// Get or create transporter (reuse connection)
-const getTransporter = () => {
-  if (!transporter) {
-    transporter = createTransporter();
-  }
-  return transporter;
-};
+initializeSendGrid();
 
 export const sendCertificateEmail = async (student, filePath) => {
-  const transporter = getTransporter();
-  if (!transporter) {
-    console.warn('❌ Email transporter not available - credentials missing');
+  const apiKey = process.env.SENDGRID_API_KEY;
+  const emailUser = process.env.EMAIL_USER;
+
+  if (!apiKey || !emailUser) {
+    console.warn('❌ SendGrid credentials are missing');
+    console.warn('SENDGRID_API_KEY:', apiKey ? 'SET' : 'MISSING');
+    console.warn('EMAIL_USER:', emailUser ? 'SET' : 'MISSING');
     return { sent: false, reason: 'missing credentials' };
   }
 
@@ -60,43 +42,53 @@ export const sendCertificateEmail = async (student, filePath) => {
     return { sent: false, reason: 'PDF file not found', path: filePath };
   }
 
+  const fileSize = fs.statSync(filePath).size;
   console.log('📧 Preparing email to:', student.email);
   console.log('📎 Attachment path:', filePath);
-  console.log('📎 File exists:', fs.existsSync(filePath));
-  console.log('📎 File size:', fs.statSync(filePath).size, 'bytes');
-
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: student.email,
-    subject: 'Participation Certificate - Event Feedback Submission',
-    html: `
-      <p>Hello ${student.name},</p>
-      <p>Thank you for participating in our event.</p>
-      <p>Your feedback has been successfully submitted.</p>
-      <p>Please find your Participation Certificate attached.</p>
-      <br />
-      <p>Regards,<br/>Event Organizing Team</p>
-    `,
-    attachments: [
-      {
-        filename: `certificate-${student.certificateId || 'download'}.pdf`,
-        path: filePath,
-      },
-    ],
-  };
+  console.log('📎 File exists: true');
+  console.log('📎 File size:', fileSize, 'bytes');
 
   try {
-    console.log('🔗 Attempting to send via SendGrid...');
-    const result = await transporter.sendMail(mailOptions);
+    // Read PDF file and convert to base64
+    const pdfData = fs.readFileSync(filePath);
+    const base64PDF = pdfData.toString('base64');
+
+    const msg = {
+      to: student.email,
+      from: emailUser, // Must be a verified sender in SendGrid
+      subject: 'Participation Certificate - Event Feedback Submission',
+      html: `
+        <p>Hello ${student.name},</p>
+        <p>Thank you for participating in our event.</p>
+        <p>Your feedback has been successfully submitted.</p>
+        <p>Please find your Participation Certificate attached.</p>
+        <br />
+        <p>Regards,<br/>Event Organizing Team</p>
+      `,
+      attachments: [
+        {
+          content: base64PDF,
+          filename: `certificate-${student.certificateId || 'download'}.pdf`,
+          type: 'application/pdf',
+          disposition: 'attachment',
+        },
+      ],
+    };
+
+    console.log('🔗 Sending via SendGrid API...');
+    const result = await sgMail.send(msg);
+    
     console.log('✅ Email sent successfully to:', student.email);
-    console.log('📨 Message ID:', result.messageId);
-    console.log('📊 Response:', result.response);
-    return { sent: true, messageId: result.messageId };
+    console.log('📨 Message ID:', result[0].headers['x-message-id']);
+    console.log('📊 Status Code:', result[0].statusCode);
+    
+    return { sent: true, messageId: result[0].headers['x-message-id'] };
   } catch (error) {
     console.error('❌ Email sending error:', {
       to: student.email,
       code: error.code,
       message: error.message,
+      response: error.response?.body || error.response,
       fullError: error.toString(),
     });
     return { sent: false, reason: error.message, code: error.code };
