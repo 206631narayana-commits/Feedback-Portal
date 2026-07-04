@@ -6,8 +6,7 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import path from 'path';
-import { fileURLToPath } from 'url';
+
 
 dotenv.config();
 
@@ -62,7 +61,7 @@ connectDB()
 
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+
 
 // 1. First, make sure you are serving your frontend static build files
 // (Replace '../frontend/dist' with your actual production build folder path)
